@@ -21,16 +21,27 @@
       const [decayedText, setDecayedText] = useState(msg);
 
       useEffect(() => {
+        // At t = 0, no decay occurs (100% pristine message)
+        if (time === 0) {
+          setDecayedText(msg);
+          return;
+        }
+
+        // T1 relaxation survival probability
         const pSuccess = Math.exp(-time / t1);
         let result = "";
+
         for (let char of msg) {
           let charCode = char.charCodeAt(0);
           let newByte = 0;
+          
           for (let bit = 7; bit >= 0; bit--) {
             let originalBit = (charCode >> bit) & 1;
             let finalBit = originalBit;
+
+            // Apply noise only if random roll falls below decay threshold
             if (Math.random() > pSuccess) {
-              finalBit = originalBit === 1 ? 0 : 1; // Bit flip error
+              finalBit = originalBit === 1 ? 0 : 1; // Bit flip
             }
             newByte = (newByte << 1) | finalBit;
           }
@@ -39,7 +50,7 @@
         setDecayedText(result);
       }, [time, t1, msg]);
 
-      const fidelity = Math.max(0, Math.round(Math.exp(-time / t1) * 100));
+      const fidelity = time === 0 ? 100 : Math.max(0, Math.round(Math.exp(-time / t1) * 100));
 
       return (
         <div class="bg-gray-800 p-6 rounded-2xl border border-gray-700 shadow-2xl space-y-6">
@@ -83,7 +94,7 @@
 
           <div class="bg-gray-900 p-4 rounded-xl border border-gray-800 font-mono space-y-2">
             <div class="text-xs text-gray-500 flex justify-between">
-              <span>OUTPUT DECOHERENCE READOUT</span>
+              <span>OUTPUT READOUT</span>
               <span>Fidelity: {fidelity}%</span>
             </div>
             <div class="text-2xl text-cyan-400 tracking-wide break-all">
@@ -93,6 +104,11 @@
         </div>
       );
     }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<QuantumSimulator />);
+  </script>
+</body>
+</html>
 
     ReactDOM.createRoot(document.getElementById('root')).render(<QuantumSimulator />);
   </script>
