@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Quantum Message Degradation Simulator</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white p-6 min-h-screen flex justify-center items-center">
+  <div id="root" class="w-full max-w-2xl"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    function QuantumSimulator() {
+      const [msg, setMsg] = useState("Rex tests da metal!");
+      const [t1, setT1] = useState(100);
+      const [time, setTime] = useState(0);
+      const [decayedText, setDecayedText] = useState(msg);
+
+      useEffect(() => {
+        const pSuccess = Math.exp(-time / t1);
+        let result = "";
+        for (let char of msg) {
+          let charCode = char.charCodeAt(0);
+          let newByte = 0;
+          for (let bit = 7; bit >= 0; bit--) {
+            let originalBit = (charCode >> bit) & 1;
+            let finalBit = originalBit;
+            if (Math.random() > pSuccess) {
+              finalBit = originalBit === 1 ? 0 : 1; // Bit flip error
+            }
+            newByte = (newByte << 1) | finalBit;
+          }
+          result += String.fromCharCode(newByte);
+        }
+        setDecayedText(result);
+      }, [time, t1, msg]);
+
+      const fidelity = Math.max(0, Math.round(Math.exp(-time / t1) * 100));
+
+      return (
+        <div class="bg-gray-800 p-6 rounded-2xl border border-gray-700 shadow-2xl space-y-6">
+          <div class="flex justify-between items-center border-b border-gray-700 pb-4">
+            <h2 class="text-xl font-bold text-cyan-400">Quantum Noise Simulator</h2>
+            <span class="text-xs font-mono bg-cyan-950 text-cyan-300 px-3 py-1 rounded-full border border-cyan-800">
+              144 Qubits (18 Chars)
+            </span>
+          </div>
+
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm text-gray-400 mb-1">Message String</label>
+              <input 
+                type="text" 
+                value={msg} 
+                onChange={(e) => setMsg(e.target.value)}
+                class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2 font-mono text-cyan-300 focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm text-gray-400 mb-1">Coherence Time (T1): {t1} µs</label>
+                <input 
+                  type="range" min="50" max="300" value={t1} 
+                  onChange={(e) => setT1(Number(e.target.value))}
+                  class="w-full accent-cyan-500"
+                />
+              </div>
+              <div>
+                <label class="block text-sm text-gray-400 mb-1">Elapsed Time: {time} µs</label>
+                <input 
+                  type="range" min="0" max="200" value={time} 
+                  onChange={(e) => setTime(Number(e.target.value))}
+                  class="w-full accent-cyan-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-gray-900 p-4 rounded-xl border border-gray-800 font-mono space-y-2">
+            <div class="text-xs text-gray-500 flex justify-between">
+              <span>OUTPUT DECOHERENCE READOUT</span>
+              <span>Fidelity: {fidelity}%</span>
+            </div>
+            <div class="text-2xl text-cyan-400 tracking-wide break-all">
+              {decayedText}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<QuantumSimulator />);
+  </script>
+</body>
+</html>
