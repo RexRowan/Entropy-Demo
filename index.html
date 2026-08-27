@@ -2,38 +2,103 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Rex Advanced Quantum Error Correction Lab</title>
+  <title>Rex Fault-Tolerant Quantum Error Correction Lab</title>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-950 text-gray-100 p-4 sm:p-8 min-h-screen flex justify-center items-center font-sans">
-  <div id="root" class="w-full max-w-4xl"></div>
+  <div id="root" class="w-full max-w-5xl"></div>
 
   <script type="text/babel">
     const { useState, useEffect } = React;
+
+    // Fano Plane SVG Visualizer Component
+    function FanoPlaneVisualizer({ activeErrors }) {
+      // 7 Qubit positions mapped to Fano Plane geometry
+      const nodes = [
+        { id: 0, label: "Q0", x: 100, y: 20 },  # Top
+        { id: 1, label: "Q1", x: 20, y: 160 },  # Bottom Left
+        { id: 2, label: "Q2", x: 180, y: 160 }, # Bottom Right
+        { id: 3, label: "Q3", x: 60, y: 90 },   # Mid Left
+        { id: 4, label: "Q4", x: 140, y: 90 },  # Mid Right
+        { id: 5, label: "Q5", x: 100, y: 160 }, # Mid Bottom
+        { id: 6, label: "Q6", x: 100, y: 110 }, # Center
+      ];
+
+      return (
+        <div class="flex flex-col items-center bg-gray-950 p-4 rounded-xl border border-gray-800">
+          <span class="text-[10px] font-mono text-cyan-400 mb-2 uppercase tracking-wider">
+            Steane [[7,1,3]] Fano Plane Geometry
+          </span>
+          <svg viewBox="0 0 200 180" class="w-48 h-44 overflow-visible">
+            {/* Outer Triangle */}
+            <polygon points="100,20 20,160 180,160" fill="none" stroke="#374151" strokeWidth="2" />
+            {/* Inner Bisectors */}
+            <line x1="100" y1="20" x2="100" y2="160" stroke="#374151" strokeWidth="1.5" strokeDasharray="3,3" />
+            <line x1="20" y1="160" x2="140" y2="90" stroke="#374151" strokeWidth="1.5" strokeDasharray="3,3" />
+            <line x1="180" y1="160" x2="60" y2="90" stroke="#374151" strokeWidth="1.5" strokeDasharray="3,3" />
+            {/* Inscribed Circle */}
+            <circle cx="100" cy="113" r="46" fill="none" stroke="#1e293b" strokeWidth="2" />
+
+            {/* Qubit Nodes */}
+            {nodes.map((node) => {
+              const hasError = activeErrors.includes(node.id);
+              return (
+                <g key={node.id}>
+                  <circle
+                    cx={node.x}
+                    cy={node.y}
+                    r="12"
+                    fill={hasError ? "#ef4444" : "#0f172a"}
+                    stroke={hasError ? "#f87171" : "#06b6d4"}
+                    strokeWidth="2"
+                    class="transition-all duration-300"
+                  />
+                  <text
+                    x={node.x}
+                    y={node.y + 4}
+                    textAnchor="middle"
+                    fill={hasError ? "#ffffff" : "#a5f3fc"}
+                    fontSize="9"
+                    fontFamily="monospace"
+                    fontWeight="bold"
+                  >
+                    {node.label}
+                  </text>
+                </g>
+              );
+            })}
+          </svg>
+          <span class="text-[9px] font-mono text-gray-500 mt-2">
+            Red = Physical Bit Flip | Non-destructive Ancilla Extraction
+          </span>
+        </div>
+      );
+    }
 
     function QuantumApp() {
       const [msg, setMsg] = useState("Rex tests da metal!");
       const [t1, setT1] = useState(100);
       const [time, setTime] = useState(0);
-      const [qecScheme, setQecScheme] = useState("none"); // "none", "rep3", "code5"
-      const [useDD, setUseDD] = useState(false); // Dynamical Decoupling
+      const [qecScheme, setQecScheme] = useState("steane7"); // "none", "rep3", "steane7"
+      const [useDD, setUseDD] = useState(false);
 
       const [decayedText, setDecayedText] = useState(msg);
       const [bitString, setBitString] = useState("");
       const [fidelity, setFidelity] = useState(100);
       const [stats, setStats] = useState({ physicalFlips: 0, corrected: 0, failures: 0 });
+      const [fanoErrors, setFanoErrors] = useState([]);
 
       useEffect(() => {
-        // Effective T1 modified by Dynamical Decoupling (DD refocusing pulses extend T2/T1 effective window)
         const effectiveT1 = useDD ? t1 * 1.8 : t1;
 
         if (time === 0) {
           setDecayedText(msg);
           setFidelity(100);
           setStats({ physicalFlips: 0, corrected: 0, failures: 0 });
+          setFanoErrors([]);
           let initialBits = "";
           for (let c of msg) {
             initialBits += c.charCodeAt(0).toString(2).padStart(8, '0') + " ";
@@ -42,7 +107,6 @@
           return;
         }
 
-        // Single physical qubit failure probability
         const pPhysicalError = 1 - Math.exp(-time / effectiveT1);
         
         let physicalFlipsCount = 0;
@@ -53,6 +117,7 @@
         let resultBits = "";
         let totalLogicalBits = msg.length * 8;
         let correctLogicalBits = 0;
+        let sampleFanoErrors = [];
 
         for (let char of msg) {
           let charCode = char.charCodeAt(0);
@@ -64,7 +129,7 @@
             let finalBit = origBit;
 
             if (qecScheme === "none") {
-              // Raw physical qubit encoding
+              // Unprotected Physical Qubit
               if (Math.random() < pPhysicalError) {
                 finalBit = origBit === 1 ? 0 : 1;
                 physicalFlipsCount++;
@@ -74,7 +139,7 @@
               }
             } 
             else if (qecScheme === "rep3") {
-              // 3-Qubit Repetition Code (Majority Vote)
+              // 3-Qubit Repetition Majority Vote
               let codeBlock = [origBit, origBit, origBit];
               let errorsInBlock = 0;
               for (let i = 0; i < 3; i++) {
@@ -84,7 +149,6 @@
                   physicalFlipsCount++;
                 }
               }
-              // Majority voting syndrome readout
               let ones = codeBlock.filter(b => b === 1).length;
               finalBit = ones >= 2 ? 1 : 0;
 
@@ -97,24 +161,49 @@
                 correctLogicalBits++;
               }
             } 
-            else if (qecScheme === "code5") {
-              // 5-Qubit Code (Distance-3 protection, corrects up to 2 physical errors)
-              let codeBlock = Array(5).fill(origBit);
-              let errorsInBlock = 0;
-              for (let i = 0; i < 5; i++) {
+            else if (qecScheme === "steane7") {
+              // Fault-Tolerant Steane [[7,1,3]] Code via Fano Plane Syndrome Extraction
+              let codeBlock = Array(7).fill(origBit);
+              let errorPositions = [];
+
+              for (let i = 0; i < 7; i++) {
                 if (Math.random() < pPhysicalError) {
                   codeBlock[i] = codeBlock[i] === 1 ? 0 : 1;
-                  errorsInBlock++;
+                  errorPositions.push(i);
                   physicalFlipsCount++;
                 }
               }
-              let ones = codeBlock.filter(b => b === 1).length;
-              finalBit = ones >= 3 ? 1 : 0;
 
-              if (errorsInBlock >= 1 && errorsInBlock <= 2) {
+              if (sampleFanoErrors.length === 0 && errorPositions.length > 0) {
+                sampleFanoErrors = [...errorPositions];
+              }
+
+              // Ancilla Syndrome Parity Checks across 3 lines of Fano Plane
+              let s1 = (codeBlock[0] ^ codeBlock[3] ^ codeBlock[4] ^ codeBlock[6]); // Line 1
+              let s2 = (codeBlock[1] ^ codeBlock[3] ^ codeBlock[5] ^ codeBlock[6]); // Line 2
+              let s3 = (codeBlock[2] ^ codeBlock[4] ^ codeBlock[5] ^ codeBlock[6]); // Line 3
+
+              // Calculate Ancilla Syndrome Hamming Weight
+              let syndromeInt = (s3 << 2) | (s2 << 1) | s1;
+              let syndromeWeight = [s1, s2, s3].filter(b => b === 1).length;
+
+              // Syndrome Lookup Table (Pinpoints exact physical qubit index)
+              const syndromeMap = { 1: 0, 2: 1, 4: 2, 3: 3, 5: 4, 6: 5, 7: 6 };
+
+              if (syndromeWeight > 0 && syndromeInt in syndromeMap) {
+                // Apply non-destructive Pauli correction
+                let targetQubit = syndromeMap[syndromeInt];
+                codeBlock[targetQubit] = codeBlock[targetQubit] === 1 ? 0 : 1;
+              }
+
+              // Read logical state post-correction
+              let correctedOnes = codeBlock.filter(b => b === 1).length;
+              finalBit = correctedOnes >= 4 ? 1 : 0;
+
+              if (errorPositions.length === 1) {
                 correctedCount++;
                 correctLogicalBits++;
-              } else if (errorsInBlock > 2) {
+              } else if (errorPositions.length > 1) {
                 failuresCount++;
               } else {
                 correctLogicalBits++;
@@ -133,11 +222,11 @@
         setBitString(resultBits.trim());
         setFidelity(Math.round((correctLogicalBits / totalLogicalBits) * 100));
         setStats({ physicalFlips: physicalFlipsCount, corrected: correctedCount, failures: failuresCount });
+        setFanoErrors(sampleFanoErrors);
 
       }, [time, t1, msg, qecScheme, useDD]);
 
-      // Calculate total physical qubits used based on QEC multiplier
-      const qecMultiplier = qecScheme === "none" ? 1 : qecScheme === "rep3" ? 3 : 5;
+      const qecMultiplier = qecScheme === "none" ? 1 : qecScheme === "rep3" ? 3 : 7;
       const totalPhysicalQubits = msg.length * 8 * qecMultiplier;
 
       return (
@@ -146,8 +235,8 @@
           {/* Header */}
           <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-800 pb-4 gap-2">
             <div>
-              <h1 class="text-2xl font-bold text-cyan-400">Quantum Teleportation & QEC Lab</h1>
-              <p class="text-xs text-gray-400">Rex → FutureRex (IBM Heron 156-Qubit Hardware Architecture)</p>
+              <h1 class="text-2xl font-bold text-cyan-400">Fault-Tolerant Quantum Teleportation Lab</h1>
+              <p class="text-xs text-gray-400">Rex → FutureRex (IBM Heron 156-Qubit Architecture)</p>
             </div>
             <div class="flex gap-2">
               <span class="text-xs font-mono bg-cyan-950 text-cyan-300 border border-cyan-800 px-3 py-1 rounded-full">
@@ -159,66 +248,62 @@
             </div>
           </div>
 
-          {/* Controls */}
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div class="sm:col-span-2">
-              <label class="block text-xs uppercase font-mono text-gray-400 mb-1">Message String</label>
-              <input 
-                type="text" 
-                value={msg} 
-                onChange={(e) => setMsg(e.target.value)}
-                class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 font-mono text-cyan-300 focus:outline-none focus:border-cyan-500"
-              />
+          {/* Fano Plane & Controls Row */}
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+            
+            {/* Fano Plane Visualizer */}
+            <div class="md:col-span-1">
+              <FanoPlaneVisualizer activeErrors={fanoErrors} />
             </div>
 
-            <div>
-              <label class="block text-xs uppercase font-mono text-gray-400 mb-1">Coherence Time (T1): {t1} µs</label>
-              <input 
-                type="range" min="50" max="300" value={t1} 
-                onChange={(e) => setT1(Number(e.target.value))}
-                class="w-full accent-cyan-500 cursor-pointer"
-              />
+            {/* Simulation Sliders */}
+            <div class="md:col-span-2 space-y-4">
+              <div>
+                <label class="block text-xs uppercase font-mono text-gray-400 mb-1">Message String</label>
+                <input 
+                  type="text" 
+                  value={msg} 
+                  onChange={(e) => setMsg(e.target.value)}
+                  class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 font-mono text-cyan-300 focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs uppercase font-mono text-gray-400 mb-1">Coherence Time (T1): {t1} µs</label>
+                  <input type="range" min="50" max="300" value={t1} onChange={(e) => setT1(Number(e.target.value))} class="w-full accent-cyan-500 cursor-pointer" />
+                </div>
+                <div>
+                  <label class="block text-xs uppercase font-mono text-gray-400 mb-1">Elapsed Time: {time} µs</label>
+                  <input type="range" min="0" max="200" value={time} onChange={(e) => setTime(Number(e.target.value))} class="w-full accent-cyan-500 cursor-pointer" />
+                </div>
+              </div>
             </div>
 
-            <div>
-              <label class="block text-xs uppercase font-mono text-gray-400 mb-1">Elapsed Time: {time} µs</label>
-              <input 
-                type="range" min="0" max="200" value={time} 
-                onChange={(e) => setTime(Number(e.target.value))}
-                class="w-full accent-cyan-500 cursor-pointer"
-              />
-            </div>
           </div>
 
           {/* Advanced QEC & Mitigation Settings */}
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-gray-950 p-4 rounded-xl border border-gray-800">
-            
             <div class="sm:col-span-2">
-              <label class="block text-xs font-mono text-gray-400 mb-2">Error Correction Scheme (QEC)</label>
+              <label class="block text-xs font-mono text-gray-400 mb-2">Error Correction Architecture</label>
               <div class="grid grid-cols-3 gap-2">
                 <button 
-                  onClick={() => setQecScheme("none")}
-                  class={`px-3 py-2 rounded-lg text-xs font-mono transition-colors border ${
-                    qecScheme === "none" ? 'bg-cyan-950 border-cyan-500 text-cyan-300' : 'bg-gray-900 border-gray-800 text-gray-400 hover:bg-gray-800'
-                  }`}
+                  onClick={() => setQecScheme("none")} 
+                  class={`px-3 py-2 rounded-lg text-xs font-mono border ${qecScheme === "none" ? 'bg-cyan-950 border-cyan-500 text-cyan-300' : 'bg-gray-900 border-gray-800 text-gray-400'}`}
                 >
                   Unprotected
                 </button>
                 <button 
-                  onClick={() => setQecScheme("rep3")}
-                  class={`px-3 py-2 rounded-lg text-xs font-mono transition-colors border ${
-                    qecScheme === "rep3" ? 'bg-cyan-950 border-cyan-500 text-cyan-300' : 'bg-gray-900 border-gray-800 text-gray-400 hover:bg-gray-800'
-                  }`}
+                  onClick={() => setQecScheme("rep3")} 
+                  class={`px-3 py-2 rounded-lg text-xs font-mono border ${qecScheme === "rep3" ? 'bg-cyan-950 border-cyan-500 text-cyan-300' : 'bg-gray-900 border-gray-800 text-gray-400'}`}
                 >
                   3-Qubit Repetition
                 </button>
                 <button 
-                  onClick={() => setQecScheme("code5")}
-                  class={`px-3 py-2 rounded-lg text-xs font-mono transition-colors border ${
-                    qecScheme === "code5" ? 'bg-cyan-950 border-cyan-500 text-cyan-300' : 'bg-gray-900 border-gray-800 text-gray-400 hover:bg-gray-800'
-                  }`}
+                  onClick={() => setQecScheme("steane7")} 
+                  class={`px-3 py-2 rounded-lg text-xs font-mono border ${qecScheme === "steane7" ? 'bg-cyan-950 border-cyan-500 text-cyan-300' : 'bg-gray-900 border-gray-800 text-gray-400'}`}
                 >
-                  5-Qubit Code
+                  Steane [[7,1,3]] Fano
                 </button>
               </div>
             </div>
@@ -226,25 +311,22 @@
             <div>
               <label class="block text-xs font-mono text-gray-400 mb-2">Dynamical Decoupling</label>
               <button 
-                onClick={() => setUseDD(!useDD)}
-                class={`w-full py-2 rounded-lg text-xs font-mono font-bold transition-colors border ${
-                  useDD ? 'bg-indigo-950 border-indigo-500 text-indigo-300' : 'bg-gray-900 border-gray-800 text-gray-400 hover:bg-gray-800'
-                }`}
+                onClick={() => setUseDD(!useDD)} 
+                class={`w-full py-2 rounded-lg text-xs font-mono font-bold border ${useDD ? 'bg-indigo-950 border-indigo-500 text-indigo-300' : 'bg-gray-900 border-gray-800 text-gray-400'}`}
               >
                 {useDD ? 'XY4 PULSES ACTIVE' : 'DD OFF'}
               </button>
             </div>
-
           </div>
 
           {/* Diagnostic Metrics Panel */}
           <div class="grid grid-cols-3 gap-3 text-center">
             <div class="bg-gray-950 p-3 rounded-xl border border-gray-800">
-              <span class="text-[10px] font-mono text-gray-500 block uppercase">Physical Bit Flips</span>
+              <span class="text-[10px] font-mono text-gray-500 block uppercase">Physical Flips</span>
               <span class="text-lg font-mono font-bold text-red-400">{stats.physicalFlips}</span>
             </div>
             <div class="bg-gray-950 p-3 rounded-xl border border-gray-800">
-              <span class="text-[10px] font-mono text-gray-500 block uppercase">QEC Corrected</span>
+              <span class="text-[10px] font-mono text-gray-500 block uppercase">Hamming Corrected</span>
               <span class="text-lg font-mono font-bold text-green-400">{stats.corrected}</span>
             </div>
             <div class="bg-gray-950 p-3 rounded-xl border border-gray-800">
@@ -262,20 +344,17 @@
               </span>
             </div>
 
-            {/* Visual Fidelity Bar */}
             <div class="w-full bg-gray-900 h-2 rounded-full overflow-hidden">
               <div 
-                class={`h-full transition-all duration-300 ${fidelity > 80 ? 'bg-green-500' : fidelity > 40 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                class={`h-full transition-all duration-300 ${fidelity > 80 ? 'bg-green-500' : fidelity > 40 ? 'bg-yellow-500' : 'bg-red-500'}`} 
                 style={{ width: `${fidelity}%` }}
               ></div>
             </div>
 
-            {/* Decoded ASCII Output */}
             <div class="text-2xl font-mono text-cyan-300 tracking-wide break-all bg-black/40 p-3 rounded-lg border border-gray-900 min-h-[56px] flex items-center">
               {decayedText}
             </div>
 
-            {/* Binary Register */}
             <div>
               <span class="text-[10px] font-mono text-gray-500 block mb-1">LOGICAL READOUT REGISTER</span>
               <div class="text-[11px] font-mono text-gray-400 break-all bg-black/40 p-3 rounded-lg border border-gray-900 max-h-20 overflow-y-auto leading-relaxed">
@@ -288,7 +367,7 @@
       );
     }
 
-    ReactDOM.createRoot(document.getElementById('root')).render(<QuantumApp />);
+    ReactDOM.createRoot(document.getElementById('root')).render(<QuantumApp/>);
   </script>
 </body>
 </html>
